@@ -8,7 +8,7 @@ def handle_data(data):
     prediction = model.predict([data])  # assuming model has a predict method
 
     # Visualize the prediction in real time
-    
+
 
 
 def print_data(data):
@@ -24,11 +24,11 @@ def load_model(model_path):
 
 if __name__ == "__main__":
     # prompt for model path
-    model_path = input("Enter path to the pre-trained model: ")
-    model = load_model(model_path)
+    # model_path = input("Enter path to the pre-trained model: ")
+    # model = load_model(model_path)
 
     receiver = UDPReceiver(port=1000)
-    receiver.start(callback=handle_data)
+    receiver.start(callback=print_data)
 
     try:
         # Keep the main thread alive

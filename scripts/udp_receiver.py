@@ -27,7 +27,7 @@ class UDPReceiver:
         self._callback = callback
         self._running = True
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._sock.bind(("0.0.0.0", self.port))
+        self._sock.bind(("127.0.0.1", self.port))
         print(f"[UDPReceiver] Listening on port {self.port}...")
 
         self._thread = threading.Thread(target=self._listen, daemon=True)
