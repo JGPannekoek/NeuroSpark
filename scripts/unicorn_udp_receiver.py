@@ -11,7 +11,7 @@ def main():
 
         # Create a UDP socket and bind it to the requested port on all interfaces
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(("127.0.0.1", port))
+        sock.bind(("0.0.0.0", port))
 
         # Buffer for receiving data
         buffer_size = 1024
@@ -19,8 +19,16 @@ def main():
 
         # Acquisition loop
         while True:
-            data, addr = sock.recvfrom(buffer_size)
-            print(f"Received {len(data)} bytes from {addr}")
+            print("Waiting for UDP packet...")
+            sock.settimeout(5)  
+            # data, addr = sock.recvfrom(buffer_size)
+            # print(f"Received {len(data)} bytes from {addr}")
+            try:
+                data, addr = sock.recvfrom(buffer_size)
+                print(f"Received {len(data)} bytes from {addr}")
+            except socket.timeout:
+                print("No data received in 5 seconds")
+                
             if data:
                 # try to decode as ASCII and print; on failure, print a safe representation
                 try:
