@@ -134,7 +134,6 @@ def live_plot():
 
 # --- MAIN ---
 if __name__ == "__main__":
-    model = DummyModel()
 
     # Start fake data
     sim_thread = threading.Thread(target=simulate_data_stream, daemon=True)

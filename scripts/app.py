@@ -4,67 +4,123 @@ import joblib
 import numpy as np
 import time
 import threading
+import os
+from PIL import Image
+from queue import Queue
 
-# --- Global variables ---
+# --- Shared state ---
 predictions = []
 timestamps = []
-max_points = 100  # number of points to show on plot
+max_points = 100
+lock = threading.Lock()
+event_queue = Queue()
+
 model = None
-lock = threading.Lock()  # thread-safety for shared data
+brainrot_counter = 0
+attention_counter = 0
+max_brainrot = 3        # threshold for "brainrot" detection
+max_attention = 5       # number of zeros to clear warning
+warning_window_open = False
 
 
 def handle_data(data):
-    """Handle each new UDP message."""
-    global predictions, timestamps, model
+    """Handle simulated incoming data."""
+    global predictions, timestamps, brainrot_counter, attention_counter, warning_window_open
 
     try:
-        # Parse incoming data string into a numeric feature array
-        # (adjust this parsing depending on your actual UDP data format)
-        features = np.array(list(map(float, data.strip().split(',')))).reshape(1, -1)
+        # Simulate prediction
+        pred = int(model.predict([[float(x) for x in data.strip().split(',')]])[0])
 
-        # Make prediction using your model
-        pred = int(model.predict(features)[0])  # assume output is 0 or 1
+        # Track runs of 1s and 0s
+        if pred == 2:
+            brainrot_counter += 1
+            attention_counter = 0
+        elif pred == 1:
+            brainrot_counter = 0
+            attention_counter += 1
+        else:
+            brainrot_counter = 0
+            attention_counter = 0
 
         # Store for visualization
         with lock:
             predictions.append(pred)
             timestamps.append(time.time())
-            # Keep only recent data
             if len(predictions) > max_points:
-                predictions = predictions[-max_points:]
-                timestamps = timestamps[-max_points:]
+                predictions[:] = predictions[-max_points:]
+                timestamps[:] = timestamps[-max_points:]
+
+        # Handle warning logic
+        if brainrot_counter >= max_brainrot and not warning_window_open:
+            event_queue.put("show_warning")
+            brainrot_counter = 0
+        elif warning_window_open and attention_counter >= max_attention:
+            event_queue.put("close_warning")
+            attention_counter = 0
 
     except Exception as e:
         print(f"[ERROR in handle_data]: {e}")
-
 
 def load_model(model_path):
     print(f"Loading model from {model_path}...")
     return joblib.load(model_path)
 
+# --- VISUALIZATION ---
+def show_warning_window():
+    """Show the warning image in a separate Matplotlib window."""
+    global warning_window_open
+    warning_window_open = True
+    print("[MAIN] Displaying brainrot warning window...")
+    img = np.asarray(Image.open('imgs/warning.jpg'))
+    fig = plt.figure("⚠️ Brainrot Warning ⚠️")
+    plt.imshow(img)
+    plt.axis('off')
+    plt.show(block=False)
+    return fig
+
+def close_warning_window(fig):
+    """Close the warning window."""
+    global warning_window_open
+    print("[MAIN] Closing warning window...")
+    plt.close(fig)
+    warning_window_open = False
 
 def live_plot():
-    """Continuously update live prediction plot."""
+    """Live-updating plot + event handling."""
     plt.ion()
     fig, ax = plt.subplots()
-    line, = ax.plot([], [], 'bo-', label='Prediction (1=Active, 0=Inactive)')
+    line, = ax.plot([], [], 'bo-', label='Prediction (1=Brainrot, 0=Normal)')
     ax.set_ylim(-0.2, 1.2)
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Prediction')
     ax.legend()
     plt.show()
 
+    warning_fig = None
+
     while True:
+        # Update main plot
         with lock:
-            if len(timestamps) > 0:
-                t = np.array(timestamps) - timestamps[0]  # relative time
+            if timestamps:
+                t = np.array(timestamps) - timestamps[0]
                 y = np.array(predictions)
                 line.set_xdata(t)
                 line.set_ydata(y)
-                ax.set_xlim(max(0, t[-1] - 10), t[-1] + 1)  # show last ~10s
+                ax.set_xlim(max(0, t[-1] - 10), t[-1] + 1)
                 ax.figure.canvas.draw()
                 ax.figure.canvas.flush_events()
-        time.sleep(0.1)  # update rate
+
+        # Handle queued events
+        try:
+            event = event_queue.get_nowait()
+            if event == "show_warning" and not warning_window_open:
+                warning_fig = show_warning_window()
+            elif event == "close_warning" and warning_window_open and warning_fig:
+                close_warning_window(warning_fig)
+        except Exception:
+            pass  # no event
+
+        time.sleep(0.1)
 
 
 if __name__ == "__main__":
